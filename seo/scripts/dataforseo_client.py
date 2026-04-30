@@ -139,12 +139,38 @@ def first_result(response: dict[str, Any]) -> dict[str, Any]:
 
 
 def all_items(response: dict[str, Any]) -> list[dict[str, Any]]:
-    """Concatenate `items` from every result in every task."""
+    """Concatenate `items` from every result in every task.
+
+    DataForSEO endpoints come in two shapes:
+      A) `result` is a list of objects, each with an `items` array
+         (Labs, SERP, On-Page, most Backlinks endpoints).
+      B) `result` is a flat list of objects with no `items` wrapper
+         (Keywords Data search_volume, bulk_keyword_difficulty, etc.).
+
+    We handle both: if a `result` element has no `items` key, treat the
+    element itself as a row.
+    """
     items: list[dict[str, Any]] = []
     for task in response.get("tasks") or []:
         for result in task.get("result") or []:
-            items.extend(result.get("items") or [])
+            sub = result.get("items")
+            if sub is None:
+                items.append(result)
+            else:
+                items.extend(sub)
     return items
+
+
+def flat_results(response: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the flat result list from every task, ignoring any items wrapper.
+
+    Use this when the endpoint puts row-level data directly in `result` and
+    you don't want any `items`-style flattening.
+    """
+    rows: list[dict[str, Any]] = []
+    for task in response.get("tasks") or []:
+        rows.extend(task.get("result") or [])
+    return rows
 
 
 def poll_task(endpoint_check: str, task_id: str, *,
