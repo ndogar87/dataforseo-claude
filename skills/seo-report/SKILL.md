@@ -1,12 +1,14 @@
 ---
 name: seo-report
-description: Generate a markdown SEO report deliverable from a saved audit. Produces a client-ready markdown document with executive summary, scores, key findings, prioritized actions, and supporting data tables.
+description: Generate a markdown SEO report deliverable from a saved DataForSEO-powered audit. Produces a client-ready markdown document with executive summary, scores, key findings, prioritized actions, and supporting data tables — ready to send to a client.
 allowed-tools:
   - Read
   - Write
 ---
 
 # SEO Markdown Report Skill
+
+> **Powered by:** Reads the audit JSON produced by `/seo audit`, which is built from live [DataForSEO API](https://dataforseo.com) data. No additional API calls — pure formatting step.
 
 Reads `~/.claude/skills/seo/output/<domain>-audit.json` and produces a
 markdown report at `~/.claude/skills/seo/output/<domain>-report.md`.

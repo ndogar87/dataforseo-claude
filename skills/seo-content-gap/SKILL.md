@@ -1,12 +1,15 @@
 ---
 name: seo-content-gap
-description: Find keywords competitors rank for that you don't. Uses DataForSEO domain intersection to surface the highest-leverage content opportunities sorted by search volume and the competitor's ranking position.
+description: Find keywords competitors rank for that you don't, via the DataForSEO Labs domain_intersection endpoint. Surfaces the highest-leverage content opportunities sorted by search volume and the competitor's ranking position, with cross-competitor consensus signals.
 allowed-tools:
   - Bash
   - Write
 ---
 
 # Content Gap Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — Labs `domain_intersection` (target1=competitor, target2=you, intersections=false).
+> **Cost:** ~$0.02 per competitor compared.
 
 ## Run
 

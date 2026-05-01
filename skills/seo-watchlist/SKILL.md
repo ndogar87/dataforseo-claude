@@ -1,6 +1,6 @@
 ---
 name: seo-watchlist
-description: Track multiple domains and keywords across runs. Saves a local watchlist of domains + their target keywords, then re-runs SERP rank checks on demand and surfaces any position changes since the last check.
+description: Track multiple domains and keywords across runs using the DataForSEO SERP API. Saves a local watchlist of domains + their target keywords, then re-runs live rank checks on demand and surfaces any position changes (gains, losses, drops) since the last check.
 allowed-tools:
   - Bash
   - Read
@@ -8,6 +8,9 @@ allowed-tools:
 ---
 
 # SEO Watchlist Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — SERP `google/organic/live/advanced` for live rank checks across the saved keyword set.
+> **Cost:** ~$0.002 per keyword per check.
 
 A simple file-based watchlist at `~/.claude/skills/seo/output/watchlist.json`.
 

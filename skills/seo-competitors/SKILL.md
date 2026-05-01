@@ -1,12 +1,15 @@
 ---
 name: seo-competitors
-description: Identify true SEO competitors and quantify the gap. Returns the top 10 competing domains by SERP overlap, with shared and unique keywords, traffic estimates, and a Competitive Score (0-100) showing how dominant the target is in its category.
+description: Identify true SEO competitors and quantify the gap, powered by the DataForSEO Labs API. Returns the top 10 competing domains by SERP overlap, with shared and unique keywords, traffic estimates, and a Competitive Score (0-100) showing how dominant the target is in its category.
 allowed-tools:
   - Bash
   - Write
 ---
 
 # SEO Competitor Analysis Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — Labs `competitors_domain` + Labs `domain_intersection`.
+> **Cost:** ~$0.05-0.08 per run.
 
 ## Run
 

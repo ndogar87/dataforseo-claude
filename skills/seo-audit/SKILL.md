@@ -1,6 +1,6 @@
 ---
 name: seo-audit
-description: Full SEO audit with parallel subagent delegation. Orchestrates 5 specialist subagents (keywords, technical, competitors, content, backlinks) and produces a composite SEO Score (0-100) with prioritized action plan and audit JSON ready for PDF export.
+description: Full SEO audit powered by the DataForSEO API. Orchestrates 5 specialist subagents (keywords, technical, competitors, content, backlinks) hitting DataForSEO Keywords Data, SERP, On-Page, Backlinks, and Labs endpoints in parallel, then produces a composite SEO Score (0-100) with prioritized action plan and audit JSON ready for PDF export.
 allowed-tools:
   - Bash
   - Write
@@ -9,6 +9,9 @@ allowed-tools:
 ---
 
 # SEO Audit Orchestrator
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — every metric below comes from live calls to DataForSEO Keywords Data, SERP, On-Page, Backlinks, and Labs endpoints.
+> **Cost:** ~$0.10-0.30 per full audit · **Setup:** add credentials to `~/.claude/skills/seo/.env`
 
 ## Workflow
 

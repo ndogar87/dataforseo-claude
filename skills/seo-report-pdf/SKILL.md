@@ -1,6 +1,6 @@
 ---
 name: seo-report-pdf
-description: Generate a professional, client-ready PDF SEO report from a saved audit. Produces a polished PDF with score gauges, prioritized action plan, keyword opportunity tables, and competitive landscape — ready to send to a client.
+description: Generate a professional, client-ready PDF SEO report from a saved DataForSEO-powered audit. Produces a polished PDF with score gauges, prioritized action plan, keyword opportunity tables, and competitive landscape — ready to send to a client.
 allowed-tools:
   - Bash
   - Read
@@ -8,6 +8,8 @@ allowed-tools:
 ---
 
 # SEO PDF Report Skill
+
+> **Powered by:** Reads the audit JSON produced by `/seo audit`, built from live [DataForSEO API](https://dataforseo.com) data. PDF generation uses ReportLab — no additional API calls.
 
 ## Prerequisite
 

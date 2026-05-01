@@ -1,12 +1,15 @@
 ---
 name: seo-backlinks
-description: Backlink profile audit via DataForSEO Backlinks API. Returns total backlinks, referring domains, dofollow ratio, top anchors with over-optimization flags, top referring domains by authority, and a toxicity assessment with an Authority Score (0-100).
+description: Backlink profile audit via the DataForSEO Backlinks API. Returns total backlinks, referring domains, dofollow ratio, top anchors with over-optimization flags, top referring domains by authority, and a toxicity assessment with an Authority Score (0-100).
 allowed-tools:
   - Bash
   - Write
 ---
 
 # Backlink Audit Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — Backlinks `summary` + `referring_domains` + `anchors` + `domain_intersection`.
+> **Cost:** ~$0.03-0.05 per run.
 
 ## Run
 

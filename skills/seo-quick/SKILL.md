@@ -1,12 +1,15 @@
 ---
 name: seo-quick
-description: 60-second SEO snapshot — core metrics for any domain in three API calls. Use when the user wants a fast read on a site's SEO health without waiting for a full audit.
+description: 60-second SEO snapshot powered by the DataForSEO API. Three parallel calls (DataForSEO Labs domain overview, Backlinks summary, ranked keywords) for core metrics on any domain — total keywords, traffic estimate, backlinks, top rankings — without waiting for a full audit.
 allowed-tools:
   - Bash
   - Write
 ---
 
 # SEO Quick Snapshot
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — Labs `domain_rank_overview` + Backlinks `summary` + Labs `ranked_keywords`.
+> **Cost:** ~$0.01-0.03 per run.
 
 Three parallel API calls, then a tight summary.
 

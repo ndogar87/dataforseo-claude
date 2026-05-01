@@ -1,12 +1,15 @@
 ---
 name: seo-keywords
-description: Keyword research and opportunity scoring via DataForSEO Keywords Data and Labs APIs. Returns search volume, CPC, competition, intent classification, related keywords, and long-tail suggestions with a Keyword Score (0-100).
+description: Keyword research and opportunity scoring via the DataForSEO Keywords Data and Labs APIs. Returns search volume, CPC, competition, intent classification, related keywords, and long-tail suggestions with a Keyword Score (0-100).
 allowed-tools:
   - Bash
   - Write
 ---
 
 # SEO Keyword Research Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — Keywords Data `google_ads/search_volume` + Labs `related_keywords` + Labs `keyword_suggestions` + Labs `bulk_keyword_difficulty`.
+> **Cost:** ~$0.05-0.10 per keyword run.
 
 ## Inputs
 

@@ -1,12 +1,15 @@
 ---
 name: seo-rankings
-description: On-demand rank checking. Looks up Google organic position for a domain across an arbitrary list of keywords. Reports each as winning / page-1 / close / not-ranking with one prioritized next action per keyword.
+description: On-demand rank checking via the DataForSEO SERP API. Looks up live Google organic positions for a domain across an arbitrary list of keywords. Reports each as winning / page-1 / close / not-ranking with one prioritized next action per keyword.
 allowed-tools:
   - Bash
   - Write
 ---
 
 # SEO Rank Checker Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — SERP `google/organic/live/advanced` + Keywords Data `google_ads/search_volume` for traffic context.
+> **Cost:** ~$0.002 per keyword checked.
 
 ## Run
 

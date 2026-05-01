@@ -1,12 +1,15 @@
 ---
 name: seo-technical
-description: Technical SEO site audit via DataForSEO On-Page API. Crawls the site, surfaces critical errors (broken links, redirect chains, missing meta, slow pages, schema gaps, indexability issues), and returns a Technical Score (0-100) with prioritized fixes.
+description: Technical SEO site audit via the DataForSEO On-Page API. Crawls the site (up to 100 pages by default), surfaces critical errors (broken links, redirect chains, missing meta, slow pages, schema gaps, indexability issues), and returns a Technical Score (0-100) with prioritized fixes.
 allowed-tools:
   - Bash
   - Write
 ---
 
 # Technical SEO Audit Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — On-Page `instant_pages` (single URL) and On-Page `task_post` + `summary` + `pages` (full crawl).
+> **Cost:** ~$0.05-0.10 per 100-page crawl. Crawl takes 2-5 minutes.
 
 ## Run
 

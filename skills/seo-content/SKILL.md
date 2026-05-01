@@ -1,12 +1,15 @@
 ---
 name: seo-content
-description: Content topical authority and gap analysis. Clusters a domain's ranked keywords into topics, identifies strong vs weak vs missing topic clusters, and returns a Content Score (0-100) plus the highest-leverage content opportunities.
+description: Content topical authority and gap analysis powered by the DataForSEO Labs API. Clusters a domain's ranked keywords into topics, identifies strong vs weak vs missing topic clusters versus competitors, and returns a Content Score (0-100) plus the highest-leverage content opportunities to write next.
 allowed-tools:
   - Bash
   - Write
 ---
 
 # SEO Content Authority Skill
+
+> **Powered by:** [DataForSEO API](https://dataforseo.com) — Labs `ranked_keywords` + Labs `competitors_domain` + Labs `domain_intersection`.
+> **Cost:** ~$0.05 per run.
 
 ## Run
 
