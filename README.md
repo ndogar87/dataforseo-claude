@@ -145,20 +145,6 @@ few minutes — that's the API doing real work, not waiting in a queue.
 
 ---
 
-## Acknowledgments
-
-This skill pack was built as a sponsored collaboration with **DataForSEO**.
-DataForSEO provides the comprehensive SEO data API that powers every command
-above — search volumes, SERPs, backlinks, technical crawls, and domain
-analytics. Sign up at [https://l.dataforseo.com/4epETnH](https://l.dataforseo.com/4epETnH).
-
-Built with [Claude Code](https://docs.claude.com/en/docs/claude-code) by
-[Zubair / AI Workshop](https://www.youtube.com/@TheAIWorkshop). For tutorials
-on building tools like this and selling them to local businesses, check out
-the YouTube channel.
-
----
-
 ## License
 
 MIT — see [LICENSE](LICENSE).
