@@ -259,7 +259,7 @@ main() {
   echo ""
   echo -e "${YELLOW}IMPORTANT — Add your DataForSEO credentials:${NC}"
   echo ""
-  echo "  1. Sign up free: https://app.dataforseo.com/register"
+  echo "  1. Sign up free: https://l.dataforseo.com/4epETnH"
   echo "  2. Edit:         ${ENV_TARGET}"
   echo "  3. Set:          DATAFORSEO_LOGIN, DATAFORSEO_PASSWORD"
   echo ""

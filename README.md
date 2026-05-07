@@ -52,7 +52,7 @@ skills, the 5 subagents, the shared DataForSEO client, and a starter `.env`.
 
 ### Then add your DataForSEO credentials
 
-1. Sign up at **[dataforseo.com/register](https://app.dataforseo.com/register)** — free trial includes $1 credit (enough for ~10 full audits).
+1. Sign up at **[dataforseo.com/register](https://l.dataforseo.com/4epETnH)** — free trial includes $1 credit (enough for ~10 full audits).
 2. Open `~/.claude/skills/seo/.env` and fill in:
    ```
    DATAFORSEO_LOGIN=your_login_email
@@ -141,7 +141,7 @@ few minutes — that's the API doing real work, not waiting in a queue.
 - macOS or Linux (Windows via Git Bash works but isn't actively tested)
 - Python 3.8+
 - [Claude Code CLI](https://docs.claude.com/en/docs/claude-code)
-- [DataForSEO account](https://app.dataforseo.com/register)
+- [DataForSEO account](https://l.dataforseo.com/4epETnH)
 
 ---
 
@@ -150,7 +150,7 @@ few minutes — that's the API doing real work, not waiting in a queue.
 This skill pack was built as a sponsored collaboration with **DataForSEO**.
 DataForSEO provides the comprehensive SEO data API that powers every command
 above — search volumes, SERPs, backlinks, technical crawls, and domain
-analytics. Sign up at [dataforseo.com](https://app.dataforseo.com/register).
+analytics. Sign up at [dataforseo.com](https://l.dataforseo.com/4epETnH).
 
 Built with [Claude Code](https://docs.claude.com/en/docs/claude-code) by
 [Zubair / AI Workshop](https://www.youtube.com/@TheAIWorkshop). For tutorials

@@ -48,7 +48,7 @@ This skill needs DataForSEO API credentials to fetch real Google SEO data.
 One-time setup, takes 60 seconds:
 
   Step 1 — Sign up free (includes $1 trial credit, ~10 full audits):
-           https://app.dataforseo.com/register
+           https://l.dataforseo.com/4epETnH
 
   Step 2 — After verifying your email, open API Access:
            https://app.dataforseo.com/api-access
@@ -126,7 +126,7 @@ in any tool output, and never commit them to git.
 
 ## Setup
 
-1. Sign up at https://app.dataforseo.com/register (free trial includes $1 credit).
+1. Sign up at https://l.dataforseo.com/4epETnH (free trial includes $1 credit).
 2. Add credentials to `~/.claude/skills/seo/.env`:
 
 ```
