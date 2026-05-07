@@ -124,18 +124,6 @@ Done. Open Claude Code and try `/seo quick example.com`.
 
 ---
 
-## Cost
-
-A typical full audit uses **~$0.10–$0.30** of DataForSEO credit. The free
-trial ($1) gets you 4–10 audits — enough to evaluate the tool. Pricing details
-at [dataforseo.com/apis](https://dataforseo.com/apis).
-
-The shared API client uses **live endpoints** (synchronous) wherever possible
-so commands feel instant. Only the full-site crawl (`/seo technical`) takes a
-few minutes — that's the API doing real work, not waiting in a queue.
-
----
-
 ## Requirements
 
 - macOS or Linux (Windows via Git Bash works but isn't actively tested)
