@@ -2,18 +2,25 @@
 
 FastAPI service that runs the Claude API agent loop for one SEO task at a
 time. Trigger.dev (or any caller) POSTs to `/run` with `{task_id, type,
-params, supabase_service_token}`; the worker boots a Claude Opus 4.7
-tool-use loop with the DataForSEO scripts registered as tools, streams
-step rows back to Supabase via `record_step`, and persists the final
-deliverables via `save_deliverable`.
+params}` plus an `X-Worker-Secret` header; the worker boots a Claude
+Opus 4.7 tool-use loop with the DataForSEO scripts registered as tools,
+streams step rows back to Supabase via `record_step`, and persists the
+final deliverables via `save_deliverable`. The worker reads its own
+`SUPABASE_SERVICE_ROLE_KEY` from env — service-role tokens are not
+accepted in the request body.
 
 ## Status
 
-Scaffold. The agent loop and tool registry are real. DataForSEO tool
-executors are stubbed (returning realistic-looking dicts) until the
-`seo/scripts/` refactor lands. Supabase persistence is real when
-`SUPABASE_URL` is set; otherwise events are appended to
-`worker/_dev_steps.jsonl` for local inspection.
+Phase 1. The agent loop, tool registry, and DataForSEO executors are all
+wired through to the real `seo/scripts/` library (each `cmd_<name>`
+function is imported lazily by the matching tool executor). Supabase
+persistence is real when `SUPABASE_URL` is set; otherwise events are
+appended to `worker/_dev_steps.jsonl` for local inspection.
+
+If the agent hits its 25-iteration cap without producing a final
+message, the run is treated as a failure: the FastAPI layer returns 500
+and Trigger.dev marks `tasks.status='failed'` rather than silently
+succeeding with a half-finished audit.
 
 ## Layout
 

@@ -65,19 +65,25 @@ export function TaskButtons({
   const [promptOpen, setPromptOpen] = useState<PromptKind | null>(null);
   const [promptValue, setPromptValue] = useState("");
 
+  // Returns true on success so the caller can close any open prompt
+  // dialog only after we've confirmed the dispatch landed. If we close
+  // first and then the Server Action errors, the user's typed value is
+  // gone and they have to retype it.
   async function dispatch(
     type: TaskType,
     extraParams: Record<string, unknown>,
-  ) {
+  ): Promise<boolean> {
     setPending(type);
     try {
       const params: Record<string, unknown> = { domain, ...extraParams };
       const result = await runTask(projectId, type, params);
       router.push(`/projects/${projectId}/tasks/${result.taskId}`);
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       toast.error("Failed to start task", { description: message });
       setPending(null);
+      return false;
     }
   }
 
@@ -91,9 +97,9 @@ export function TaskButtons({
     void dispatch(type, {});
   }
 
-  function onPromptSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onPromptSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!promptOpen) return;
+    if (!promptOpen || pending) return;
     const trimmed = promptValue.trim();
     if (!trimmed) {
       toast.error("Please enter a value before continuing.");
@@ -110,8 +116,15 @@ export function TaskButtons({
           }
         : { [config.field]: trimmed };
     const type = promptOpen;
-    setPromptOpen(null);
-    void dispatch(type, params);
+    // Don't close the dialog yet — if dispatch fails, the typed value
+    // would be lost. dispatch() returns true once the navigation has
+    // been kicked off; close at that point so the route transition
+    // doesn't fight the dialog teardown.
+    const ok = await dispatch(type, params);
+    if (ok) {
+      setPromptOpen(null);
+      setPromptValue("");
+    }
   }
 
   const activePrompt = promptOpen ? PROMPTS[promptOpen] : null;
@@ -145,6 +158,10 @@ export function TaskButtons({
       <Dialog
         open={promptOpen !== null}
         onOpenChange={(open) => {
+          // Don't allow the user (or a backdrop click) to dismiss the
+          // dialog while a dispatch is in flight — closing would lose
+          // the typed value if the Server Action then errors.
+          if (!open && pending) return;
           if (!open) setPromptOpen(null);
         }}
       >
@@ -162,16 +179,27 @@ export function TaskButtons({
                 value={promptValue}
                 onChange={(e) => setPromptValue(e.target.value)}
                 placeholder={activePrompt.placeholder}
+                disabled={pending !== null}
               />
               <DialogFooter>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setPromptOpen(null)}
+                  disabled={pending !== null}
                 >
                   Cancel
                 </Button>
-                <Button type="submit">Run</Button>
+                <Button type="submit" disabled={pending !== null}>
+                  {pending !== null ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Starting…
+                    </>
+                  ) : (
+                    "Run"
+                  )}
+                </Button>
               </DialogFooter>
             </form>
           )}

@@ -46,6 +46,15 @@ function normalizeDomain(input: string): string {
  * Returns `{ ok: true, projectId }` on success so the caller can
  * `router.push` to the new detail page; `{ ok: false, error }` on
  * any failure (auth, no workspace, bad input, db error).
+ *
+ * Phase 1 gap: there is no UI flow for creating a workspace or for
+ * adding the first member to an existing workspace. The seed file
+ * (`web/db/seed.sql`) inserts the agency workspace, but a Supabase
+ * admin still has to add each newly-invited staff user to
+ * `workspace_members` manually. If the user has zero memberships
+ * we surface that with a clear error message rather than silently
+ * failing. Phase 2 introduces a /signup flow that creates a
+ * workspace + Stripe customer + initial owner row in one shot.
  */
 export async function createProject(
   input: CreateProjectInput,

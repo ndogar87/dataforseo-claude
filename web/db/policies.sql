@@ -44,7 +44,20 @@ create policy workspaces_member_select on public.workspaces
 
 drop policy if exists workspaces_owner_update on public.workspaces;
 create policy workspaces_owner_update on public.workspaces
-  for update using (
+  for update
+  using (
+    exists (
+      select 1 from public.workspace_members wm
+      where wm.workspace_id = workspaces.id
+        and wm.user_id = auth.uid()
+        and wm.role = 'owner'
+    )
+  )
+  -- WITH CHECK mirrors USING so the policy is symmetric: an owner can
+  -- only persist a new row they would also be allowed to see. Without
+  -- this clause the row could be updated into a state the same caller
+  -- can't read back.
+  with check (
     exists (
       select 1 from public.workspace_members wm
       where wm.workspace_id = workspaces.id

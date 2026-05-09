@@ -37,7 +37,7 @@ from fastapi import FastAPI, Header, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from agent import AgentConfigError, run as run_agent
+from agent import AgentConfigError, AgentRunError, run as run_agent
 from steps import record_step, reset_step_counter
 
 logger = logging.getLogger("worker")
@@ -208,6 +208,29 @@ def run(
         record_step(req.task_id, "Worker config error", "failed", {"error": str(exc)})
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    except AgentRunError as exc:
+        # The agent loop hit a terminal failure (iteration cap, malformed
+        # response, etc.). Record what we know and surface a 500 so
+        # Trigger.dev marks `tasks.status='failed'` instead of treating
+        # the half-finished run as a success.
+        logger.warning("Agent run error for task %s: %s", req.task_id, exc)
+        partial = exc.partial
+        record_step(
+            req.task_id,
+            "Worker run failed",
+            "failed",
+            {
+                "error": str(exc),
+                "iterations": partial.iterations if partial else None,
+                "stop_reason": partial.stop_reason if partial else None,
+                "cost_usd": partial.cost_usd if partial else None,
+                "tool_calls": partial.tool_calls if partial else None,
+            },
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(exc),
         ) from exc
     except Exception as exc:  # noqa: BLE001

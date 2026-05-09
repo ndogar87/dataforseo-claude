@@ -26,6 +26,13 @@ interface TaskTimelineProps {
   projectId: string;
 }
 
+// Per-channel Realtime state. The Supabase status callback emits
+// SUBSCRIBED on success and CHANNEL_ERROR / TIMED_OUT / CLOSED on
+// failure; we collapse the failure modes to a single "error" state for
+// the UI banner and keep the connecting → subscribed transition
+// distinct so we can show "Connecting…" briefly on first paint.
+type RealtimeState = "connecting" | "subscribed" | "error";
+
 export function TaskTimeline({
   initialTask,
   initialSteps,
@@ -42,6 +49,15 @@ export function TaskTimeline({
   const [signedUrls, setSignedUrls] =
     useState<Record<string, string>>(initialSignedUrls);
 
+  // Realtime channel state. We track each channel independently so the
+  // UI can show a "Reconnecting…" hint when any of them aren't healthy.
+  // SUBSCRIBED is the only good state; CHANNEL_ERROR / TIMED_OUT /
+  // CLOSED all warrant a notice. Initial state is "connecting".
+  const [stepsState, setStepsState] = useState<RealtimeState>("connecting");
+  const [taskState, setTaskState] = useState<RealtimeState>("connecting");
+  const [deliverableState, setDeliverableState] =
+    useState<RealtimeState>("connecting");
+
   // Track which deliverables we've already minted URLs for client-side
   // so we don't spam Storage on every re-render.
   const mintedRef = useRef<Set<string>>(
@@ -56,6 +72,20 @@ export function TaskTimeline({
   // ------------------------------------------------------------------
   useEffect(() => {
     const taskId = initialTask.id;
+
+    const handleStatus =
+      (label: string, set: (s: RealtimeState) => void) =>
+      (status: string, err?: Error) => {
+        if (status === "SUBSCRIBED") {
+          set("subscribed");
+          return;
+        }
+        // Anything else is a real signal worth surfacing. We log to the
+        // console so a dev can spot it; the UI shows a small banner.
+        // Don't echo any task data — keep this strictly diagnostic.
+        console.error(`[realtime] ${label} channel: ${status}`, err);
+        set("error");
+      };
 
     const stepsChannel = supabase
       .channel(`task-steps:${taskId}`)
@@ -85,7 +115,7 @@ export function TaskTimeline({
           setSteps((prev) => mergeStep(prev, next));
         },
       )
-      .subscribe();
+      .subscribe(handleStatus("task_steps", setStepsState));
 
     const taskChannel = supabase
       .channel(`task:${taskId}`)
@@ -102,7 +132,7 @@ export function TaskTimeline({
           setTask(next);
         },
       )
-      .subscribe();
+      .subscribe(handleStatus("tasks", setTaskState));
 
     const deliverableChannel = supabase
       .channel(`deliverables:${taskId}`)
@@ -122,7 +152,7 @@ export function TaskTimeline({
           });
         },
       )
-      .subscribe();
+      .subscribe(handleStatus("deliverables", setDeliverableState));
 
     return () => {
       void supabase.removeChannel(stepsChannel);
@@ -130,6 +160,24 @@ export function TaskTimeline({
       void supabase.removeChannel(deliverableChannel);
     };
   }, [initialTask.id, supabase]);
+
+  // Roll up the three channel states into a single banner state. We only
+  // show a banner while the task is still in-flight — once it's terminal
+  // (succeeded / failed / cancelled) the realtime channels are advisory
+  // and a connection blip is uninteresting.
+  const realtimeBanner = (() => {
+    if (
+      task.status === "succeeded" ||
+      task.status === "failed" ||
+      task.status === "cancelled"
+    ) {
+      return null;
+    }
+    const states = [stepsState, taskState, deliverableState];
+    if (states.some((s) => s === "error")) return "error" as const;
+    if (states.some((s) => s === "connecting")) return "connecting" as const;
+    return null;
+  })();
 
   // ------------------------------------------------------------------
   // Whenever a new deliverable arrives, mint a signed URL for it via
@@ -180,10 +228,20 @@ export function TaskTimeline({
         <div className="space-y-4 lg:col-span-3">
           <div className="flex items-center gap-2">
             <StatusBadge status={task.status} />
-            {task.cost_usd > 0 && (
+            {(task.cost_usd ?? 0) > 0 && (
               <Badge variant="outline" className="tabular-nums">
-                ${task.cost_usd.toFixed(2)}
+                ${(task.cost_usd ?? 0).toFixed(2)}
               </Badge>
+            )}
+            {realtimeBanner === "connecting" && (
+              <span className="text-xs text-muted-foreground">
+                Connecting to live updates…
+              </span>
+            )}
+            {realtimeBanner === "error" && (
+              <span className="text-xs text-amber-600">
+                Reconnecting to live updates…
+              </span>
             )}
           </div>
 
@@ -196,6 +254,21 @@ export function TaskTimeline({
                     This task failed
                   </p>
                   <p className="break-all text-destructive/80">{task.error}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {task.status === "cancelled" && (
+            <Card className="border-muted bg-muted/30">
+              <CardContent className="flex gap-3 py-4">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="space-y-1 text-sm">
+                  <p className="font-medium">This task was cancelled</p>
+                  <p className="text-muted-foreground">
+                    No deliverables were produced. Start a new task from the
+                    project page if you need fresh results.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -311,6 +384,10 @@ export function TaskTimeline({
             ) : task.status === "failed" ? (
               <p className="text-sm text-muted-foreground">
                 No deliverables — the run failed before producing output.
+              </p>
+            ) : task.status === "cancelled" ? (
+              <p className="text-sm text-muted-foreground">
+                No deliverables — the task was cancelled.
               </p>
             ) : (
               <p className="text-sm text-muted-foreground">

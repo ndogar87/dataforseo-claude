@@ -52,6 +52,22 @@ class AgentConfigError(RuntimeError):
     """Raised when the agent cannot start — typically a missing API key."""
 
 
+class AgentRunError(RuntimeError):
+    """Raised when the agent loop fails to produce a final message
+    (e.g. hit the iteration cap, or stopped emitting tool_use blocks
+    without ever returning an end_turn). The FastAPI layer turns this
+    into a 500 so Trigger.dev marks `tasks.status='failed'` rather than
+    silently succeeding with a half-finished run.
+
+    Carries the partial result so the caller can still record cost +
+    iteration count for diagnostics.
+    """
+
+    def __init__(self, message: str, partial: "AgentResult | None" = None) -> None:
+        super().__init__(message)
+        self.partial = partial
+
+
 @dataclass
 class AgentResult:
     """Outcome of an agent loop run."""
@@ -245,19 +261,41 @@ def run_agent(
                 )
 
         if not tool_result_blocks:
-            # Defensive: stop_reason was tool_use but no actual blocks. Bail.
-            break
+            # stop_reason was tool_use but the message contained no actual
+            # tool_use blocks. This shouldn't happen, but if it does we
+            # can't continue the loop without producing a malformed
+            # request. Surface as a failure so Trigger.dev marks the task
+            # failed rather than silently "succeeded".
+            partial = AgentResult(
+                final_text=_extract_final_text(response),
+                iterations=iteration,
+                stop_reason=last_stop_reason or "no_tool_use_blocks",
+                cost_usd=round(total_cost, 6),
+                usage=usage_totals,
+                tool_calls=tool_calls,
+            )
+            raise AgentRunError(
+                "Agent stopped with stop_reason='tool_use' but emitted no tool_use blocks.",
+                partial=partial,
+            )
 
         messages.append({"role": "user", "content": tool_result_blocks})
 
-    # Hit the iteration cap.
-    return AgentResult(
+    # Hit the iteration cap. This is a failure — the model never produced
+    # an end_turn. Raise so the FastAPI layer returns 500 and Trigger.dev
+    # marks `tasks.status='failed'`. Returning success here would silently
+    # mark a half-finished audit as succeeded.
+    partial = AgentResult(
         final_text="Agent loop hit max iterations without producing a final message.",
         iterations=max_iterations,
         stop_reason=last_stop_reason or "max_iterations",
         cost_usd=round(total_cost, 6),
         usage=usage_totals,
         tool_calls=tool_calls,
+    )
+    raise AgentRunError(
+        f"Agent loop hit the {max_iterations}-iteration cap without producing a final message.",
+        partial=partial,
     )
 
 

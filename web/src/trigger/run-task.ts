@@ -18,8 +18,10 @@ import type { TaskType } from "@/lib/types";
  * here — Trigger.dev just needs to know whether the worker call was OK
  * and what it cost.
  *
- * NOTE: the parent route in `trigger.config.ts` already sets
- * `maxDuration: 3600`, which comfortably covers a 2–5 minute audit.
+ * NOTE: the per-run cap is set globally in `trigger.config.ts`
+ * (`maxDuration: 3600`), which comfortably covers a 2–5 minute audit.
+ * We deliberately do NOT set `maxDuration` on this task definition —
+ * one source of truth keeps the limit easy to tune.
  */
 
 interface RunTaskPayload {
@@ -55,8 +57,7 @@ function adminClient() {
 
 export const runTaskTask = task({
   id: "run-task",
-  // Per-run cap; trigger.config.ts also sets a global cap.
-  maxDuration: 3600,
+  // maxDuration intentionally inherited from trigger.config.ts.
   run: async (payload: RunTaskPayload) => {
     const { taskId } = payload;
     if (!taskId) throw new Error("run-task: missing taskId");
@@ -80,7 +81,7 @@ export const runTaskTask = task({
     // 1. Read the queued task row.
     const { data: row, error: readErr } = await supabase
       .from("tasks")
-      .select("id, type, params_json, status, project_id")
+      .select("id, type, params_json, status, project_id, started_at")
       .eq("id", taskId)
       .single();
 
@@ -92,6 +93,38 @@ export const runTaskTask = task({
 
     const taskType = row.type as TaskType;
     const params = (row.params_json ?? {}) as Record<string, unknown>;
+    const currentStatus = row.status as
+      | "queued"
+      | "running"
+      | "succeeded"
+      | "failed"
+      | "cancelled";
+    const previouslyStarted = row.started_at != null;
+
+    // Idempotency guard: if Trigger.dev retries us after the previous
+    // attempt already kicked the worker (started_at is set) AND the
+    // task landed in a terminal state, refuse to re-dispatch. We don't
+    // want to charge twice for an audit that already ran — we'd rather
+    // surface the previous failure to the user. Trigger.dev's retry
+    // policy exists for transient infra blips; once the task itself
+    // has run, retrying is a footgun.
+    if (
+      previouslyStarted &&
+      (currentStatus === "succeeded" ||
+        currentStatus === "failed" ||
+        currentStatus === "cancelled")
+    ) {
+      logger.warn(
+        "run-task: refusing to re-dispatch a task already in a terminal state",
+        { taskId, status: currentStatus },
+      );
+      return {
+        taskId,
+        type: taskType,
+        skipped: true,
+        reason: `task already ${currentStatus}`,
+      };
+    }
 
     // 2. Mark running.
     const { error: updErr } = await supabase

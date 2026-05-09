@@ -133,6 +133,26 @@ Done. Open Claude Code and try `/seo quick example.com`.
 
 ---
 
+## Part 2 — webapp (in development)
+
+The CLI skill pack is the engine. A multi-tenant web dashboard is being
+built around it so an agency can manage many client domains in one
+place, run tasks at the click of a button, and share results with
+clients via signed links + email. Same DataForSEO scripts, same
+composite-score formula — wrapped in a Next.js + Supabase + FastAPI
+stack with a live timeline UI.
+
+- **Architecture, data model, phases:** see [`plan.md`](plan.md).
+- **Web app (Next.js 15 / Supabase):** [`web/`](web/) — see
+  [`web/README.md`](web/README.md).
+- **Worker (FastAPI + Claude tool-use loop):** [`worker/`](worker/) —
+  see [`worker/README.md`](worker/README.md).
+
+The webapp does not replace the CLI; the CLI keeps working unchanged
+for solo / local-dev use.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

@@ -20,6 +20,61 @@ const VALID_TYPES: ReadonlySet<TaskType> = new Set([
   "report_pdf",
 ]);
 
+/**
+ * Lightweight per-type shape check for the user-supplied params. Claude
+ * itself is forgiving of unknown keys, but we'd rather fail fast on the
+ * web side than spend cents booting a Claude run for an obviously
+ * malformed payload (no seed for keywords, no keywords list for
+ * rankings, etc.).
+ *
+ * Returns null when the params are acceptable, or a short user-facing
+ * error message otherwise. Domain is checked at the top level since
+ * every task type passes through {domain, ...extra} from task-buttons.
+ */
+function validateTaskParams(
+  type: TaskType,
+  params: Record<string, unknown>,
+): string | null {
+  const requireString = (key: string): string | null => {
+    const v = params[key];
+    if (typeof v !== "string" || v.trim().length === 0) {
+      return `Missing required parameter '${key}' for task type '${type}'.`;
+    }
+    return null;
+  };
+
+  // Most task types operate on a project domain; the report_pdf type
+  // operates on a previously-produced audit blob and doesn't need one.
+  if (type !== "report_pdf") {
+    const err = requireString("domain");
+    if (err) return err;
+  }
+
+  switch (type) {
+    case "keywords": {
+      return requireString("seed");
+    }
+    case "rankings": {
+      const v = params.keywords;
+      if (!Array.isArray(v) || v.length === 0) {
+        return "Rankings tasks need a non-empty 'keywords' array.";
+      }
+      const allStrings = v.every(
+        (k) => typeof k === "string" && k.trim().length > 0,
+      );
+      if (!allStrings) {
+        return "Rankings keywords must all be non-empty strings.";
+      }
+      return null;
+    }
+    case "content_gap": {
+      return requireString("competitor_domain");
+    }
+    default:
+      return null;
+  }
+}
+
 export interface RunTaskResult {
   taskId: string;
 }
@@ -40,6 +95,14 @@ export async function runTask(
 ): Promise<RunTaskResult> {
   if (!VALID_TYPES.has(type)) {
     throw new Error(`Unknown task type: ${type}`);
+  }
+
+  // Validate per-type param shape *before* we authenticate or hit the
+  // database. Cheap up-front check; saves us from inserting a queued
+  // task row + spinning Claude up for a payload that's obviously bad.
+  const shapeErr = validateTaskParams(type, params);
+  if (shapeErr) {
+    throw new Error(shapeErr);
   }
 
   // 1. Authed user.
