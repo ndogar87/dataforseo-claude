@@ -9,88 +9,134 @@ Usage:
   domain_overview.py content_gap   --you you.com --competitors a.com b.com c.com
 
 Output: JSON to stdout.
+
+This module is also importable as a library: each `cmd_*` function returns
+a dict and is safe to call from a long-running worker process.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 
-from dataforseo_client import (
-    DEFAULT_LANGUAGE,
-    DEFAULT_LOCATION,
-    all_items,
-    call,
-    first_result,
-    normalize_domain,
-    write_json,
-)
+try:
+    from .dataforseo_client import (
+        DEFAULT_LANGUAGE,
+        DEFAULT_LOCATION,
+        DataForSEOError,
+        all_items,
+        call,
+        first_result,
+        normalize_domain,
+        write_json,
+    )
+except ImportError:
+    from dataforseo_client import (  # type: ignore[no-redef]
+        DEFAULT_LANGUAGE,
+        DEFAULT_LOCATION,
+        DataForSEOError,
+        all_items,
+        call,
+        first_result,
+        normalize_domain,
+        write_json,
+    )
 
 
-def _loc_lang(args: argparse.Namespace) -> dict:
-    return {"location_name": args.location, "language_code": args.language}
+def _loc_lang(location: str, language: str) -> dict[str, str]:
+    return {"location_name": location, "language_code": language}
 
 
-def cmd_overview(args: argparse.Namespace) -> None:
-    payload = {"target": normalize_domain(args.target), **_loc_lang(args)}
+def cmd_overview(
+    target: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+) -> dict[str, Any]:
+    """Domain rank overview metrics."""
+    payload = {"target": normalize_domain(target), **_loc_lang(location, language)}
     data = call("dataforseo_labs/google/domain_rank_overview/live", payload)
-    write_json(first_result(data), args.out)
+    return first_result(data)
 
 
-def cmd_ranked(args: argparse.Namespace) -> None:
+def cmd_ranked(
+    target: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Keywords the target domain currently ranks for."""
     payload = {
-        "target": normalize_domain(args.target),
-        "limit": args.limit,
+        "target": normalize_domain(target),
+        "limit": limit,
         "order_by": ["keyword_data.keyword_info.search_volume,desc"],
-        **_loc_lang(args),
+        **_loc_lang(location, language),
     }
     data = call("dataforseo_labs/google/ranked_keywords/live", payload)
-    write_json({"target": args.target, "items": all_items(data)}, args.out)
+    return {"target": target, "items": all_items(data)}
 
 
-def cmd_competitors(args: argparse.Namespace) -> None:
+def cmd_competitors(
+    target: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    limit: int = 50,
+) -> dict[str, Any]:
+    """Organic competitors for a target domain."""
     payload = {
-        "target": normalize_domain(args.target),
-        "limit": args.limit,
-        **_loc_lang(args),
+        "target": normalize_domain(target),
+        "limit": limit,
+        **_loc_lang(location, language),
     }
     data = call("dataforseo_labs/google/competitors_domain/live", payload)
-    write_json({"target": args.target, "items": all_items(data)}, args.out)
+    return {"target": target, "items": all_items(data)}
 
 
-def cmd_intersect(args: argparse.Namespace) -> None:
+def cmd_intersect(
+    you: str,
+    competitor: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    limit: int = 100,
+) -> dict[str, Any]:
     """Keywords where BOTH domains rank (head-to-head intersection)."""
     payload = {
-        "target1": normalize_domain(args.you),
-        "target2": normalize_domain(args.competitor),
+        "target1": normalize_domain(you),
+        "target2": normalize_domain(competitor),
         "intersections": True,
-        "limit": args.limit,
-        **_loc_lang(args),
+        "limit": limit,
+        **_loc_lang(location, language),
     }
     data = call("dataforseo_labs/google/domain_intersection/live", payload)
-    write_json({
-        "you": args.you,
-        "competitor": args.competitor,
+    return {
+        "you": you,
+        "competitor": competitor,
         "items": all_items(data),
-    }, args.out)
+    }
 
 
-def cmd_content_gap(args: argparse.Namespace) -> None:
-    """Keywords competitors rank for that you don't — content gap."""
-    you = normalize_domain(args.you)
-    items_by_competitor = {}
-    for comp in args.competitors:
+def cmd_content_gap(
+    you: str,
+    competitors: list[str],
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    limit: int = 100,
+) -> dict[str, Any]:
+    """Keywords competitors rank for that you don't - content gap."""
+    you_norm = normalize_domain(you)
+    items_by_competitor: dict[str, list[dict[str, Any]]] = {}
+    for comp in competitors:
         payload = {
             "target1": normalize_domain(comp),
-            "target2": you,
+            "target2": you_norm,
             "intersections": False,
-            "limit": args.limit,
+            "limit": limit,
             "order_by": ["first_domain_serp_element.keyword_data.keyword_info.search_volume,desc"],
-            **_loc_lang(args),
+            **_loc_lang(location, language),
         }
         data = call("dataforseo_labs/google/domain_intersection/live", payload)
         items_by_competitor[comp] = all_items(data)
-    write_json({"you": args.you, "gaps": items_by_competitor}, args.out)
+    return {"you": you, "gaps": items_by_competitor}
 
 
 def main() -> None:
@@ -101,25 +147,43 @@ def main() -> None:
 
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p1 = sub.add_parser("overview"); p1.add_argument("--target", required=True); p1.set_defaults(func=cmd_overview)
+    p1 = sub.add_parser("overview")
+    p1.add_argument("--target", required=True)
+    p1.set_defaults(func=lambda a: cmd_overview(a.target, a.location, a.language))
 
-    p2 = sub.add_parser("ranked"); p2.add_argument("--target", required=True)
-    p2.add_argument("--limit", type=int, default=100); p2.set_defaults(func=cmd_ranked)
+    p2 = sub.add_parser("ranked")
+    p2.add_argument("--target", required=True)
+    p2.add_argument("--limit", type=int, default=100)
+    p2.set_defaults(func=lambda a: cmd_ranked(a.target, a.location, a.language, a.limit))
 
-    p3 = sub.add_parser("competitors"); p3.add_argument("--target", required=True)
-    p3.add_argument("--limit", type=int, default=50); p3.set_defaults(func=cmd_competitors)
+    p3 = sub.add_parser("competitors")
+    p3.add_argument("--target", required=True)
+    p3.add_argument("--limit", type=int, default=50)
+    p3.set_defaults(func=lambda a: cmd_competitors(a.target, a.location, a.language, a.limit))
 
-    p4 = sub.add_parser("intersect"); p4.add_argument("--you", required=True)
-    p4.add_argument("--competitor", required=True); p4.add_argument("--limit", type=int, default=100)
-    p4.set_defaults(func=cmd_intersect)
+    p4 = sub.add_parser("intersect")
+    p4.add_argument("--you", required=True)
+    p4.add_argument("--competitor", required=True)
+    p4.add_argument("--limit", type=int, default=100)
+    p4.set_defaults(
+        func=lambda a: cmd_intersect(a.you, a.competitor, a.location, a.language, a.limit)
+    )
 
-    p5 = sub.add_parser("content_gap"); p5.add_argument("--you", required=True)
+    p5 = sub.add_parser("content_gap")
+    p5.add_argument("--you", required=True)
     p5.add_argument("--competitors", nargs="+", required=True)
     p5.add_argument("--limit", type=int, default=100)
-    p5.set_defaults(func=cmd_content_gap)
+    p5.set_defaults(
+        func=lambda a: cmd_content_gap(a.you, a.competitors, a.location, a.language, a.limit)
+    )
 
     args = parser.parse_args()
-    args.func(args)
+    try:
+        result = args.func(args)
+    except DataForSEOError as exc:
+        sys.stderr.write(f"ERROR: {exc}\n")
+        sys.exit(1)
+    write_json(result, args.out)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,10 @@ Usage:
   on_page_audit.py site  --target example.com --max-crawl-pages 100
 
 Output: JSON to stdout.
+
+This module is also importable as a library: each `cmd_*` function returns
+a dict and is safe to call from a long-running worker process. `cmd_site`
+polls internally - the worker can call it as one synchronous unit.
 """
 
 from __future__ import annotations
@@ -16,21 +20,32 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from typing import Any
 
-from dataforseo_client import (
-    DataForSEOError,
-    all_items,
-    call,
-    first_result,
-    normalize_domain,
-    poll_task,
-    write_json,
-)
+try:
+    from .dataforseo_client import (
+        DataForSEOError,
+        all_items,
+        call,
+        first_result,
+        normalize_domain,
+        write_json,
+    )
+except ImportError:
+    from dataforseo_client import (  # type: ignore[no-redef]
+        DataForSEOError,
+        all_items,
+        call,
+        first_result,
+        normalize_domain,
+        write_json,
+    )
 
 
-def cmd_page(args: argparse.Namespace) -> None:
+def cmd_page(url: str) -> dict[str, Any]:
+    """Single-page instant audit."""
     payload = {
-        "url": args.url,
+        "url": url,
         "enable_javascript": True,
         "enable_browser_rendering": True,
         "load_resources": True,
@@ -40,8 +55,8 @@ def cmd_page(args: argparse.Namespace) -> None:
     result = first_result(data)
     items = result.get("items") or []
     page = items[0] if items else {}
-    write_json({
-        "url": args.url,
+    return {
+        "url": url,
         "status_code": page.get("status_code"),
         "page_timing": page.get("page_timing"),
         "meta": page.get("meta"),
@@ -53,15 +68,20 @@ def cmd_page(args: argparse.Namespace) -> None:
         },
         "resource_errors": page.get("resource_errors"),
         "fetch_time": page.get("fetch_time"),
-    }, args.out)
+    }
 
 
-def cmd_site(args: argparse.Namespace) -> None:
+def cmd_site(
+    target: str,
+    max_crawl_pages: int = 100,
+    max_wait: int = 600,
+    poll_interval: int = 15,
+) -> dict[str, Any]:
     """Kick off a full-site crawl, wait for it, then summarize the issues."""
-    target = normalize_domain(args.target)
+    target_norm = normalize_domain(target)
     start_payload = {
-        "target": target,
-        "max_crawl_pages": args.max_crawl_pages,
+        "target": target_norm,
+        "max_crawl_pages": max_crawl_pages,
         "load_resources": True,
         "enable_javascript": True,
         "custom_user_agent": "Mozilla/5.0 (compatible; DataForSEOBot/1.0)",
@@ -72,28 +92,30 @@ def cmd_site(args: argparse.Namespace) -> None:
     if not task_id:
         raise DataForSEOError(f"Failed to start crawl: {start}")
 
-    deadline = time.time() + args.max_wait
+    deadline = time.time() + max_wait
+    ready = False
     while time.time() < deadline:
-        time.sleep(args.poll_interval)
-        status = call(f"on_page/tasks_ready", {})
-        ready_ids = []
+        time.sleep(poll_interval)
+        status = call("on_page/tasks_ready", {})
+        ready_ids: list[str] = []
         for r in (status.get("tasks") or [{}])[0].get("result") or []:
             if r.get("id"):
                 ready_ids.append(r["id"])
         if task_id in ready_ids:
+            ready = True
             break
-    else:
-        raise DataForSEOError(f"Crawl {task_id} not ready within {args.max_wait}s")
+    if not ready:
+        raise DataForSEOError(f"Crawl {task_id} not ready within {max_wait}s")
 
     summary = call(f"on_page/summary/{task_id}", [])
-    pages = call(f"on_page/pages", {"id": task_id, "limit": 100})
+    pages = call("on_page/pages", {"id": task_id, "limit": 100})
 
-    write_json({
-        "target": target,
+    return {
+        "target": target_norm,
         "task_id": task_id,
         "summary": first_result(summary),
         "page_sample": all_items(pages)[:100],
-    }, args.out)
+    }
 
 
 def main() -> None:
@@ -104,17 +126,24 @@ def main() -> None:
 
     p_page = sub.add_parser("page", help="Single-page instant audit.")
     p_page.add_argument("--url", required=True)
-    p_page.set_defaults(func=cmd_page)
+    p_page.set_defaults(func=lambda a: cmd_page(a.url))
 
     p_site = sub.add_parser("site", help="Full-site crawl + summary.")
     p_site.add_argument("--target", required=True)
     p_site.add_argument("--max-crawl-pages", type=int, default=100)
     p_site.add_argument("--max-wait", type=int, default=600)
     p_site.add_argument("--poll-interval", type=int, default=15)
-    p_site.set_defaults(func=cmd_site)
+    p_site.set_defaults(
+        func=lambda a: cmd_site(a.target, a.max_crawl_pages, a.max_wait, a.poll_interval)
+    )
 
     args = parser.parse_args()
-    args.func(args)
+    try:
+        result = args.func(args)
+    except DataForSEOError as exc:
+        sys.stderr.write(f"ERROR: {exc}\n")
+        sys.exit(1)
+    write_json(result, args.out)
 
 
 if __name__ == "__main__":

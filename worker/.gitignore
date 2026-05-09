@@ -1,0 +1,21 @@
+# Python venv
+.venv/
+venv/
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Dev-mode step persistence (no Supabase)
+_dev_steps.jsonl
+
+# Editable install metadata
+*.egg-info/
+
+# Environment
+.env
+
+# Build / dist
+build/
+dist/

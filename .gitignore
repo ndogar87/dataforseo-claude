@@ -41,3 +41,14 @@ output/
 
 # Logs
 *.log
+
+# Screenshots / scratch images (often dropped in repo root by users)
+image.png
+Screenshot*.png
+
+# Node / Next (in case anything bleeds into root)
+node_modules/
+.next/
+
+# Plan files (kept locally, written elsewhere)
+# (plan.md is intentionally tracked — remove this comment if reverting)

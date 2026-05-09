@@ -7,58 +7,94 @@ Usage:
   serp_check.py featured --keyword "what is geo"   # featured snippet / AIO check
 
 Output: JSON to stdout.
+
+This module is also importable as a library: each `cmd_*` function returns
+a dict and is safe to call from a long-running worker process.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 
-from dataforseo_client import (
-    DEFAULT_LANGUAGE,
-    DEFAULT_LOCATION,
-    call,
-    first_result,
-    normalize_domain,
-    write_json,
-)
+try:
+    from .dataforseo_client import (
+        DEFAULT_LANGUAGE,
+        DEFAULT_LOCATION,
+        DataForSEOError,
+        call,
+        first_result,
+        normalize_domain,
+        write_json,
+    )
+except ImportError:
+    from dataforseo_client import (  # type: ignore[no-redef]
+        DEFAULT_LANGUAGE,
+        DEFAULT_LOCATION,
+        DataForSEOError,
+        call,
+        first_result,
+        normalize_domain,
+        write_json,
+    )
 
 
-def _serp_payload(keyword: str, args: argparse.Namespace) -> dict:
+def _serp_payload(
+    keyword: str,
+    location: str,
+    language: str,
+    device: str,
+    depth: int,
+) -> dict[str, Any]:
     return {
         "keyword": keyword,
-        "location_name": args.location,
-        "language_code": args.language,
-        "device": args.device,
-        "os": "windows" if args.device == "desktop" else "ios",
-        "depth": args.depth,
+        "location_name": location,
+        "language_code": language,
+        "device": device,
+        "os": "windows" if device == "desktop" else "ios",
+        "depth": depth,
     }
 
 
-def cmd_serp(args: argparse.Namespace) -> None:
+def cmd_serp(
+    keyword: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    device: str = "desktop",
+    depth: int = 100,
+) -> dict[str, Any]:
+    """Full organic SERP for a keyword."""
     data = call(
         "serp/google/organic/live/advanced",
-        _serp_payload(args.keyword, args),
+        _serp_payload(keyword, location, language, device, depth),
     )
     result = first_result(data)
-    write_json(
-        {
-            "keyword": args.keyword,
-            "location": args.location,
-            "items": result.get("items") or [],
-            "se_results_count": result.get("se_results_count"),
-            "spell": result.get("spell"),
-        },
-        args.out,
-    )
+    return {
+        "keyword": keyword,
+        "location": location,
+        "items": result.get("items") or [],
+        "se_results_count": result.get("se_results_count"),
+        "spell": result.get("spell"),
+    }
 
 
-def cmd_rank(args: argparse.Namespace) -> None:
+def cmd_rank(
+    domain: str,
+    keywords: list[str],
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    device: str = "desktop",
+    depth: int = 100,
+) -> dict[str, Any]:
     """For each keyword, find the target domain's organic position (1..100)."""
-    domain = normalize_domain(args.domain)
-    rankings = []
-    for kw in args.keywords:
-        data = call("serp/google/organic/live/advanced", _serp_payload(kw, args))
+    domain_norm = normalize_domain(domain)
+    rankings: list[dict[str, Any]] = []
+    for kw in keywords:
+        data = call(
+            "serp/google/organic/live/advanced",
+            _serp_payload(kw, location, language, device, depth),
+        )
         result = first_result(data)
         items = result.get("items") or []
         position = None
@@ -68,7 +104,7 @@ def cmd_rank(args: argparse.Namespace) -> None:
             if item.get("type") != "organic":
                 continue
             item_domain = normalize_domain(item.get("domain") or "")
-            if domain in item_domain or item_domain.endswith(domain):
+            if domain_norm in item_domain or item_domain.endswith(domain_norm):
                 position = item.get("rank_absolute") or item.get("rank_group")
                 url_found = item.get("url")
                 title_found = item.get("title")
@@ -79,18 +115,24 @@ def cmd_rank(args: argparse.Namespace) -> None:
             "url": url_found,
             "title": title_found,
         })
-    write_json({"domain": domain, "rankings": rankings}, args.out)
+    return {"domain": domain_norm, "rankings": rankings}
 
 
-def cmd_featured(args: argparse.Namespace) -> None:
+def cmd_featured(
+    keyword: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    device: str = "desktop",
+    depth: int = 100,
+) -> dict[str, Any]:
     """Detect featured snippet, AI overview, PAA, and other SERP features."""
     data = call(
         "serp/google/organic/live/advanced",
-        _serp_payload(args.keyword, args),
+        _serp_payload(keyword, location, language, device, depth),
     )
     result = first_result(data)
     items = result.get("items") or []
-    features: dict[str, list[dict]] = {}
+    features: dict[str, list[dict[str, Any]]] = {}
     for item in items:
         t = item.get("type")
         if t and t != "organic":
@@ -100,11 +142,11 @@ def cmd_featured(args: argparse.Namespace) -> None:
                 "domain": item.get("domain"),
                 "url": item.get("url"),
             })
-    write_json({
-        "keyword": args.keyword,
+    return {
+        "keyword": keyword,
         "item_types_present": result.get("item_types"),
         "features": features,
-    }, args.out)
+    }
 
 
 def main() -> None:
@@ -119,19 +161,32 @@ def main() -> None:
 
     p_serp = sub.add_parser("serp", help="Full organic SERP for a keyword.")
     p_serp.add_argument("--keyword", required=True)
-    p_serp.set_defaults(func=cmd_serp)
+    p_serp.set_defaults(
+        func=lambda a: cmd_serp(a.keyword, a.location, a.language, a.device, a.depth)
+    )
 
     p_rank = sub.add_parser("rank", help="Rank check for a domain across keywords.")
     p_rank.add_argument("--domain", required=True)
     p_rank.add_argument("--keywords", nargs="+", required=True)
-    p_rank.set_defaults(func=cmd_rank)
+    p_rank.set_defaults(
+        func=lambda a: cmd_rank(
+            a.domain, a.keywords, a.location, a.language, a.device, a.depth
+        )
+    )
 
     p_feat = sub.add_parser("featured", help="SERP feature breakdown for a keyword.")
     p_feat.add_argument("--keyword", required=True)
-    p_feat.set_defaults(func=cmd_featured)
+    p_feat.set_defaults(
+        func=lambda a: cmd_featured(a.keyword, a.location, a.language, a.device, a.depth)
+    )
 
     args = parser.parse_args()
-    args.func(args)
+    try:
+        result = args.func(args)
+    except DataForSEOError as exc:
+        sys.stderr.write(f"ERROR: {exc}\n")
+        sys.exit(1)
+    write_json(result, args.out)
 
 
 if __name__ == "__main__":

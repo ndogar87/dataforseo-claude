@@ -4,8 +4,12 @@
 Usage:
   generate_pdf_report.py --input audit.json --output report.pdf
 
-The JSON schema is flexible — see seo/schema/audit_input.example.json for the
+The JSON schema is flexible - see seo/schema/audit_input.example.json for the
 shape produced by the /seo audit orchestrator. Missing sections are skipped.
+
+This module is also importable as a library: `cmd_generate(input_path_or_dict,
+output_path)` accepts either a path to a JSON file or an already-parsed dict
+and returns the output path as a string.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 try:
     from reportlab.lib import colors
@@ -252,16 +257,32 @@ def build(audit: dict, output: Path) -> None:
     doc.build(story)
 
 
+def cmd_generate(input_path: str | dict[str, Any], output_path: str) -> str:
+    """Build a PDF report and return the output path as a string.
+
+    `input_path` may be either a filesystem path to a JSON audit file, or an
+    already-parsed audit dict (so a worker can pass data in-memory without
+    a roundtrip through disk).
+    """
+    if isinstance(input_path, dict):
+        audit: dict[str, Any] = input_path
+    else:
+        audit = json.loads(Path(input_path).read_text(encoding="utf-8"))
+
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    build(audit, out)
+    return str(out)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate PDF SEO report.")
     parser.add_argument("--input", "-i", required=True, help="Path to audit JSON.")
     parser.add_argument("--output", "-o", required=True, help="Path to write PDF.")
     args = parser.parse_args()
 
-    audit = json.loads(Path(args.input).read_text(encoding="utf-8"))
-    out = Path(args.output)
-    build(audit, out)
-    sys.stderr.write(f"PDF written to {out}\n")
+    out_path = cmd_generate(args.input, args.output)
+    sys.stderr.write(f"PDF written to {out_path}\n")
 
 
 if __name__ == "__main__":

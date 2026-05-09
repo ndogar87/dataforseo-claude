@@ -8,82 +8,121 @@ Usage:
   keyword_research.py volume kw1 kw2 kw3 ...
 
 Output: JSON to stdout. Claude reads this and produces analysis.
+
+This module is also importable as a library: each `cmd_*` function returns
+a dict and is safe to call from a long-running worker process. The CLI
+shim at the bottom is the only caller that prints / exits.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+from typing import Any
 
-from dataforseo_client import (
-    DEFAULT_LANGUAGE,
-    DEFAULT_LOCATION,
-    all_items,
-    call,
-    first_result,
-    write_json,
-)
+try:  # Library import (e.g. `from seo.scripts import keyword_research`)
+    from .dataforseo_client import (
+        DEFAULT_LANGUAGE,
+        DEFAULT_LOCATION,
+        DataForSEOError,
+        all_items,
+        call,
+        write_json,
+    )
+except ImportError:  # CLI invocation: `python keyword_research.py ...`
+    from dataforseo_client import (  # type: ignore[no-redef]
+        DEFAULT_LANGUAGE,
+        DEFAULT_LOCATION,
+        DataForSEOError,
+        all_items,
+        call,
+        write_json,
+    )
 
 
-def cmd_seed(args: argparse.Namespace) -> None:
+def cmd_seed(
+    keyword: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+) -> dict[str, Any]:
     """Pull search volume + CPC + competition for a single seed keyword."""
     payload = {
-        "keywords": [args.keyword],
-        "location_name": args.location,
-        "language_code": args.language,
+        "keywords": [keyword],
+        "location_name": location,
+        "language_code": language,
     }
     data = call("keywords_data/google_ads/search_volume/live", payload)
     items = all_items(data)
-    write_json({"keyword": args.keyword, "metrics": items}, args.out)
+    return {"keyword": keyword, "metrics": items}
 
 
-def cmd_related(args: argparse.Namespace) -> None:
+def cmd_related(
+    keyword: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    depth: int = 1,
+    limit: int = 200,
+) -> dict[str, Any]:
     """Related keywords with full SEO metrics."""
     payload = {
-        "keyword": args.keyword,
-        "location_name": args.location,
-        "language_code": args.language,
-        "depth": args.depth,
-        "limit": args.limit,
+        "keyword": keyword,
+        "location_name": location,
+        "language_code": language,
+        "depth": depth,
+        "limit": limit,
         "include_seed_keyword": True,
     }
     data = call("dataforseo_labs/google/related_keywords/live", payload)
-    write_json({"seed": args.keyword, "items": all_items(data)}, args.out)
+    return {"seed": keyword, "items": all_items(data)}
 
 
-def cmd_suggestions(args: argparse.Namespace) -> None:
+def cmd_suggestions(
+    keyword: str,
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+    limit: int = 200,
+) -> dict[str, Any]:
     """Long-tail suggestions ranked by search volume."""
     payload = {
-        "keyword": args.keyword,
-        "location_name": args.location,
-        "language_code": args.language,
-        "limit": args.limit,
+        "keyword": keyword,
+        "location_name": location,
+        "language_code": language,
+        "limit": limit,
         "include_serp_info": False,
         "order_by": ["keyword_info.search_volume,desc"],
     }
     data = call("dataforseo_labs/google/keyword_suggestions/live", payload)
-    write_json({"seed": args.keyword, "items": all_items(data)}, args.out)
+    return {"seed": keyword, "items": all_items(data)}
 
 
-def cmd_volume(args: argparse.Namespace) -> None:
+def cmd_volume(
+    keywords: list[str],
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+) -> dict[str, Any]:
     """Bulk volume + CPC for an arbitrary list of keywords."""
     payload = {
-        "keywords": args.keywords,
-        "location_name": args.location,
-        "language_code": args.language,
+        "keywords": keywords,
+        "location_name": location,
+        "language_code": language,
     }
     data = call("keywords_data/google_ads/search_volume/live", payload)
-    write_json({"items": all_items(data)}, args.out)
+    return {"items": all_items(data)}
 
 
-def cmd_difficulty(args: argparse.Namespace) -> None:
+def cmd_difficulty(
+    keywords: list[str],
+    location: str = DEFAULT_LOCATION,
+    language: str = DEFAULT_LANGUAGE,
+) -> dict[str, Any]:
+    """Bulk keyword difficulty scores."""
     payload = {
-        "keywords": args.keywords,
-        "location_name": args.location,
-        "language_code": args.language,
+        "keywords": keywords,
+        "location_name": location,
+        "language_code": language,
     }
     data = call("dataforseo_labs/google/bulk_keyword_difficulty/live", payload)
-    write_json({"items": all_items(data)}, args.out)
+    return {"items": all_items(data)}
 
 
 def main() -> None:
@@ -96,29 +135,38 @@ def main() -> None:
 
     p_seed = sub.add_parser("seed", help="Volume/CPC for a single keyword.")
     p_seed.add_argument("keyword")
-    p_seed.set_defaults(func=cmd_seed)
+    p_seed.set_defaults(func=lambda a: cmd_seed(a.keyword, a.location, a.language))
 
     p_related = sub.add_parser("related", help="Related keywords with metrics.")
     p_related.add_argument("keyword")
     p_related.add_argument("--depth", type=int, default=1, choices=[0, 1, 2, 3, 4])
     p_related.add_argument("--limit", type=int, default=200)
-    p_related.set_defaults(func=cmd_related)
+    p_related.set_defaults(
+        func=lambda a: cmd_related(a.keyword, a.location, a.language, a.depth, a.limit)
+    )
 
     p_sugg = sub.add_parser("suggestions", help="Long-tail suggestions.")
     p_sugg.add_argument("keyword")
     p_sugg.add_argument("--limit", type=int, default=200)
-    p_sugg.set_defaults(func=cmd_suggestions)
+    p_sugg.set_defaults(
+        func=lambda a: cmd_suggestions(a.keyword, a.location, a.language, a.limit)
+    )
 
     p_vol = sub.add_parser("volume", help="Bulk search volume + CPC.")
     p_vol.add_argument("keywords", nargs="+")
-    p_vol.set_defaults(func=cmd_volume)
+    p_vol.set_defaults(func=lambda a: cmd_volume(a.keywords, a.location, a.language))
 
     p_diff = sub.add_parser("difficulty", help="Bulk keyword difficulty.")
     p_diff.add_argument("keywords", nargs="+")
-    p_diff.set_defaults(func=cmd_difficulty)
+    p_diff.set_defaults(func=lambda a: cmd_difficulty(a.keywords, a.location, a.language))
 
     args = parser.parse_args()
-    args.func(args)
+    try:
+        result = args.func(args)
+    except DataForSEOError as exc:
+        sys.stderr.write(f"ERROR: {exc}\n")
+        sys.exit(1)
+    write_json(result, args.out)
 
 
 if __name__ == "__main__":
