@@ -78,8 +78,9 @@ Required for production:
 | Variable | Purpose |
 |---|---|
 | `ANTHROPIC_API_KEY` | Drives the Claude tool-use loop. The worker returns 503 without it. |
+| `WORKER_SHARED_SECRET` | Required. The worker rejects `POST /run` calls without a matching `X-Worker-Secret` header. The Trigger.dev task in `web/src/trigger/run-task.ts` must use the same value. Generate with `openssl rand -hex 32`. |
 | `SUPABASE_URL` | Service-role REST base. When unset, steps fall back to the local JSONL log. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service-role JWT for writes. Per-task tokens via the request body override this. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role JWT for writes. The worker reads this from its own env — it is **not** accepted in the request body. |
 | `DATAFORSEO_LOGIN` / `DATAFORSEO_PASSWORD` | Used by the DataForSEO tool executors (currently stubbed; required once `seo/scripts/` ships its callable functions). |
 
 Optional:

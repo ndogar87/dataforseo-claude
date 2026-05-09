@@ -225,9 +225,21 @@ as $$
   from public.deliverables d
   join public.tasks t      on t.id = d.task_id
   join public.projects p   on p.id = t.project_id
-  where d.public_token = p_token
-    and (d.expires_at is null or d.expires_at > now());
+  -- Strict expiry: a missing expires_at is treated as "no public access".
+  -- Token length floor defangs empty-string / single-char probes.
+  where coalesce(length(p_token), 0) >= 16
+    and d.public_token = p_token
+    and d.expires_at is not null
+    and d.expires_at > now();
 $$;
 
+revoke all on function public.public_share_view(text) from public;
 grant execute on function public.public_share_view(text) to anon;
 grant execute on function public.public_share_view(text) to authenticated;
+
+-- Lock down the workspace-membership helper too: only logged-in users
+-- should ever evaluate it. Anon evaluation isn't reachable today (anon
+-- never hits an RLS policy that needs it) but restricting EXECUTE keeps
+-- the surface tight.
+revoke all on function public.is_workspace_member(uuid) from public, anon;
+grant execute on function public.is_workspace_member(uuid) to authenticated;

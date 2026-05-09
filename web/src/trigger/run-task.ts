@@ -64,6 +64,16 @@ export const runTaskTask = task({
     const supabase = adminClient();
     const workerUrl = process.env.WORKER_URL;
     if (!workerUrl) throw new Error("WORKER_URL not set");
+    // Shared secret authenticates this dispatcher to the worker. We
+    // require it whenever the worker is on a non-localhost URL — i.e.
+    // anywhere it's actually reachable from the public internet.
+    const workerSecret = (process.env.WORKER_SHARED_SECRET ?? "").trim();
+    const isLocalWorker = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(workerUrl);
+    if (!workerSecret && !isLocalWorker) {
+      throw new Error(
+        "WORKER_SHARED_SECRET is not set; refusing to dispatch to a non-local worker.",
+      );
+    }
 
     // 1. Read the queued task row.
     const { data: row, error: readErr } = await supabase
@@ -101,14 +111,19 @@ export const runTaskTask = task({
 
     let resp: Response;
     try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (workerSecret) headers["X-Worker-Secret"] = workerSecret;
       resp = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
+        // The worker reads its own SUPABASE_SERVICE_ROLE_KEY from env;
+        // we deliberately do NOT send a service-role token in the body.
         body: JSON.stringify({
           task_id: taskId,
           type: taskType,
           params,
-          supabase_service_token: process.env.SUPABASE_SERVICE_ROLE_KEY,
         }),
       });
     } catch (fetchErr) {
