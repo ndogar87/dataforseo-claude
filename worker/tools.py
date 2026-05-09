@@ -29,8 +29,6 @@ The two infrastructure tools — ``record_step`` and ``save_deliverable``
 
 from __future__ import annotations
 
-import os
-import re
 import time
 from typing import Any, Callable
 
@@ -40,6 +38,7 @@ from typing import Any, Callable
 # ``/app/`` so this is a no-op.
 import path_setup  # noqa: F401
 
+from scrub import scrub_payload, truncate_label
 from steps import record_step as _record_step
 from steps import save_deliverable as _save_deliverable
 
@@ -240,150 +239,17 @@ def _exec_domain_content_gap(args: dict[str, Any], _ctx: dict[str, Any]) -> Any:
 # ---------------------------------------------------------------------------
 # Infrastructure tool executors (real, not stubbed)
 # ---------------------------------------------------------------------------
-
-
-# Defense-in-depth caps so a prompt-injection that tricks Claude into
-# stuffing secrets through `record_step` can't actually exfiltrate much.
-# These bound size, depth, and explicitly redact env-vars + token shapes.
-_RECORD_STEP_LABEL_MAX = 200
-_RECORD_STEP_PAYLOAD_MAX_BYTES = 8 * 1024  # 8 KB total per step
-_RECORD_STEP_STRING_MAX = 1000             # 1 KB per leaf string
-_RECORD_STEP_MAX_DEPTH = 4
-_REDACTED = "[redacted]"
-
-# Heuristics for things that look like secrets. Conservative — we want
-# to redact rather than leak. Patterns:
-#   - JWT-shaped: 3 dot-separated base64url segments (~30+ chars total).
-#   - sk-* / sb-* / supa-* / Bearer * tokens.
-#   - Long hex / base64-ish strings that look more like keys than text.
-_SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\beyJ[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{6,}\.[A-Za-z0-9_\-]{6,}\b"),
-    re.compile(r"\b(sk|sb|sbp|rk|pk|service_role)[-_][A-Za-z0-9_-]{16,}\b", re.I),
-    re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}\b", re.I),
-    re.compile(r"\b[A-Fa-f0-9]{40,}\b"),
-    re.compile(r"\b[A-Za-z0-9+/]{40,}={0,2}\b"),
-)
-
-# Field names whose values we always redact.
-_SENSITIVE_FIELD_NAMES = {
-    "anthropic_api_key",
-    "supabase_service_role_key",
-    "supabase_service_token",
-    "service_role",
-    "service_token",
-    "api_key",
-    "apikey",
-    "auth",
-    "authorization",
-    "password",
-    "secret",
-    "session",
-    "cookie",
-    "jwt",
-    "token",
-    "x-worker-secret",
-    "worker_shared_secret",
-}
-
-
-def _scrub_string(s: str) -> str:
-    """Truncate + redact secret-looking substrings inside a string."""
-    if len(s) > _RECORD_STEP_STRING_MAX:
-        s = s[:_RECORD_STEP_STRING_MAX] + "…"
-    for pat in _SECRET_PATTERNS:
-        s = pat.sub(_REDACTED, s)
-    return s
-
-
-def _scrub_value(value: Any, depth: int = 0) -> Any:
-    """Recursively scrub a payload value: depth-bounded, secret-aware."""
-    if depth >= _RECORD_STEP_MAX_DEPTH:
-        return _REDACTED + " (depth)"
-    if isinstance(value, str):
-        return _scrub_string(value)
-    if isinstance(value, (int, float, bool)) or value is None:
-        return value
-    if isinstance(value, dict):
-        out: dict[str, Any] = {}
-        for k, v in value.items():
-            key = str(k)
-            if key.lower() in _SENSITIVE_FIELD_NAMES:
-                out[key] = _REDACTED
-            else:
-                out[key] = _scrub_value(v, depth + 1)
-        return out
-    if isinstance(value, (list, tuple)):
-        # Bound list length too.
-        capped = list(value)[:50]
-        return [_scrub_value(v, depth + 1) for v in capped]
-    # Fall back: stringify, then scrub.
-    return _scrub_string(str(value))
-
-
-def _scrub_payload_for_step(payload: Any) -> Any:
-    """Apply secret redaction + size caps to a payload before it lands in
-    `task_steps`. Also redacts any value whose substring matches a known
-    env-var secret (so even a clever encoding gets caught).
-    """
-    if payload is None:
-        return {}
-
-    scrubbed = _scrub_value(payload)
-
-    # Last line of defense: replace any literal env-var secret value that
-    # somehow survived structural scrubbing. We compare against the raw
-    # values of variables we know are sensitive.
-    env_secrets: list[str] = []
-    for env_name in (
-        "WORKER_SHARED_SECRET",
-        "SUPABASE_SERVICE_ROLE_KEY",
-        "ANTHROPIC_API_KEY",
-        "DATAFORSEO_PASSWORD",
-        "RESEND_API_KEY",
-    ):
-        v = os.environ.get(env_name, "").strip()
-        # Skip very short values to avoid spurious replacements.
-        if v and len(v) >= 12:
-            env_secrets.append(v)
-
-    def _replace_env_secrets(obj: Any) -> Any:
-        if isinstance(obj, str):
-            out = obj
-            for sec in env_secrets:
-                if sec in out:
-                    out = out.replace(sec, _REDACTED)
-            return out
-        if isinstance(obj, dict):
-            return {k: _replace_env_secrets(v) for k, v in obj.items()}
-        if isinstance(obj, list):
-            return [_replace_env_secrets(v) for v in obj]
-        return obj
-
-    scrubbed = _replace_env_secrets(scrubbed)
-
-    # Hard byte cap — if it's still too big, JSON-truncate.
-    import json as _json
-
-    try:
-        encoded = _json.dumps(scrubbed, default=str)
-        if len(encoded.encode("utf-8")) > _RECORD_STEP_PAYLOAD_MAX_BYTES:
-            return {
-                "_truncated": True,
-                "summary": _scrub_string(encoded)[:1000] + "…",
-            }
-    except Exception:  # noqa: BLE001
-        return {"_truncated": True, "summary": "<unserialisable payload>"}
-
-    return scrubbed
+# `record_step` and `save_deliverable` are the only tools that mutate
+# Supabase from inside the agent loop. Payloads going to `record_step`
+# pass through :mod:`scrub` so a prompt-injection cannot smuggle env
+# vars or tokens out via the live timeline.
 
 
 def _exec_record_step(args: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     task_id = ctx["task_id"]
-    label = str(args.get("label", "step")).strip() or "step"
-    if len(label) > _RECORD_STEP_LABEL_MAX:
-        label = label[:_RECORD_STEP_LABEL_MAX] + "…"
+    label = truncate_label(str(args.get("label", "step")).strip() or "step")
     status = str(args.get("status", "running"))
-    payload = _scrub_payload_for_step(args.get("payload"))
+    payload = scrub_payload(args.get("payload"))
     row = _record_step(task_id, label, status, payload)
     return {"ok": True, "step": {k: row.get(k) for k in ("idx", "label", "status")}}
 

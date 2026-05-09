@@ -86,7 +86,10 @@ export default async function ProjectsPage() {
               {projects.map((p) => (
                 <TableRow key={p.id} className="cursor-pointer">
                   <TableCell className="font-medium">
-                    <Link href={`/projects/${p.id}`} className="hover:underline">
+                    <Link
+                      href={`/projects/${p.id}`}
+                      className="hover:underline"
+                    >
                       {p.display_name}
                     </Link>
                   </TableCell>

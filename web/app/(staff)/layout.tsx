@@ -10,11 +10,9 @@ export default async function StaffLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // TODO: real auth guard
-  // const supabase = await createClient();
-  // const { data: { user } } = await supabase.auth.getUser();
-  // if (!user) redirect("/login");
-  // const workspace = await fetchActiveWorkspace(supabase, user.id);
+  // Auth is enforced per-page (each Server Component reads `supabase.auth.getUser()`
+  // and redirects to /login when null). Workspace context resolution is a Phase 2
+  // concern — see `lib/workspace-context.tsx`.
 
   return (
     <WorkspaceProvider>

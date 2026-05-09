@@ -68,7 +68,9 @@ export const runTaskTask = task({
     // require it whenever the worker is on a non-localhost URL — i.e.
     // anywhere it's actually reachable from the public internet.
     const workerSecret = (process.env.WORKER_SHARED_SECRET ?? "").trim();
-    const isLocalWorker = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(workerUrl);
+    const isLocalWorker = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(
+      workerUrl,
+    );
     if (!workerSecret && !isLocalWorker) {
       throw new Error(
         "WORKER_SHARED_SECRET is not set; refusing to dispatch to a non-local worker.",
@@ -101,7 +103,10 @@ export const runTaskTask = task({
       })
       .eq("id", taskId);
     if (updErr) {
-      logger.warn("Failed to mark task running", { taskId, err: updErr.message });
+      logger.warn("Failed to mark task running", {
+        taskId,
+        err: updErr.message,
+      });
     }
 
     // 3. Call the worker. This is synchronous — Trigger.dev's

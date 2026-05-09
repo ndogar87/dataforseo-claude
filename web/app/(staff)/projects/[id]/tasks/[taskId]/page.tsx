@@ -4,11 +4,8 @@ import { notFound } from "next/navigation";
 import { Separator } from "@/components/ui/separator";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/admin";
-import type {
-  DeliverableRow,
-  TaskRow,
-  TaskStepRow,
-} from "@/lib/types";
+import { stripBucketPrefix } from "@/lib/storage";
+import type { DeliverableRow, TaskRow, TaskStepRow } from "@/lib/types";
 
 import { TaskTimeline } from "./task-timeline";
 
@@ -54,7 +51,9 @@ export default async function TaskTimelinePage({
   // task has already finished by the time we render server-side.
   const { data: deliverablesData } = await supabase
     .from("deliverables")
-    .select("id, task_id, kind, storage_path, public_token, expires_at, created_at")
+    .select(
+      "id, task_id, kind, storage_path, public_token, expires_at, created_at",
+    )
     .eq("task_id", taskId)
     .order("created_at", { ascending: false });
   const deliverables = (deliverablesData ?? []) as DeliverableRow[];
@@ -74,7 +73,7 @@ export default async function TaskTimelinePage({
           >
             ← {project.display_name}
           </Link>
-          <h1 className="text-2xl font-semibold tracking-tight capitalize">
+          <h1 className="text-2xl font-semibold capitalize tracking-tight">
             {task.type.replace("_", " ")}
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -131,11 +130,4 @@ async function mintSignedUrls(
     }),
   );
   return out;
-}
-
-function stripBucketPrefix(storagePath: string): string {
-  const prefix = "deliverables/";
-  return storagePath.startsWith(prefix)
-    ? storagePath.slice(prefix.length)
-    : storagePath;
 }

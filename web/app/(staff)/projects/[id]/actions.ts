@@ -3,7 +3,7 @@
 import { tasks } from "@trigger.dev/sdk/v3";
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { getServiceClient } from "@/lib/supabase/admin";
+import { getServiceClient, insertRow, updateRow } from "@/lib/supabase/admin";
 import type { TaskType } from "@/lib/types";
 // Importing as `type` keeps this safe for the server bundle while
 // still letting `tasks.trigger<typeof runTaskTask>(...)` infer payload types.
@@ -69,26 +69,19 @@ export async function runTask(
   // needed, and the supabase-js untyped client makes a follow-up
   // .maybeSingle() flaky anyway.
 
-  // 4. Insert the queued tasks row using the service-role client so
+  // 3. Insert the queued tasks row using the service-role client so
   // we control exactly which columns are set; RLS on `tasks` would
   // also allow this insert via the user client, but going through
   // service-role keeps the audit trail consistent with Trigger.dev /
   // worker writes that follow.
   const admin = getServiceClient();
-  // TODO: replace with generated types from `supabase gen types`. The
-  // hand-written Database shape doesn't satisfy supabase-js 2.105's
-  // stricter Insert generic, so cast the payload through `unknown` to
-  // unblock the build.
-  const insertPayload = {
+  const { data: inserted, error: insertErr } = await insertRow(admin, "tasks", {
     project_id: project.id,
     type,
     status: "queued",
     params_json: params,
     created_by: user.id,
-  } as unknown as never;
-  const { data: inserted, error: insertErr } = await admin
-    .from("tasks")
-    .insert(insertPayload)
+  })
     .select("id")
     .single<{ id: string }>();
 
@@ -100,7 +93,7 @@ export async function runTask(
 
   const taskId = inserted.id as string;
 
-  // 5. Dispatch via Trigger.dev. We use the namespaced `tasks.trigger`
+  // 4. Dispatch via Trigger.dev. We use the namespaced `tasks.trigger`
   // form so we don't have to import the runtime task module from a
   // server action (Next was occasionally tripping over the trigger
   // SDK's worker-side imports during bundling).
@@ -108,14 +101,11 @@ export async function runTask(
     await tasks.trigger<typeof runTaskTask>("run-task", { taskId });
   } catch (err) {
     // Mark the row failed so the UI doesn't sit forever in `queued`.
-    await admin
-      .from("tasks")
-      .update({
-        status: "failed",
-        finished_at: new Date().toISOString(),
-        error: `Trigger.dev dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
-      })
-      .eq("id", taskId);
+    await updateRow(admin, "tasks", {
+      status: "failed",
+      finished_at: new Date().toISOString(),
+      error: `Trigger.dev dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
+    }).eq("id", taskId);
     throw err;
   }
 

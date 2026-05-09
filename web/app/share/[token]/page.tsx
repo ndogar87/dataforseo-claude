@@ -4,8 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { getServiceClient } from "@/lib/supabase/admin";
-import { stripBucketPrefix } from "@/lib/share";
+import { getServiceClient, updateRow } from "@/lib/supabase/admin";
+import { stripBucketPrefix } from "@/lib/storage";
 
 interface ShareViewRow {
   deliverable_id: string;
@@ -155,8 +155,8 @@ function DeliverableViewer({
   if (!fileUrl) {
     return (
       <p className="text-sm text-muted-foreground">
-        We couldn&apos;t prepare the file for viewing. Please try refreshing
-        in a moment.
+        We couldn&apos;t prepare the file for viewing. Please try refreshing in
+        a moment.
       </p>
     );
   }
@@ -250,8 +250,8 @@ function ExpiredOrInvalid() {
           Link unavailable
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          This share link is invalid or has expired. Contact the person who
-          sent it for an updated link.
+          This share link is invalid or has expired. Contact the person who sent
+          it for an updated link.
         </p>
       </div>
     </div>
@@ -288,13 +288,10 @@ async function recordOpen(
     const lastOpened = row.opened_at ? new Date(row.opened_at).getTime() : 0;
     if (lastOpened > fiveMinAgo) return;
 
-    await admin
-      .from("share_events")
-      .update({
-        opened_at: row.opened_at ?? new Date().toISOString(),
-        click_count: (row.click_count ?? 0) + 1,
-      })
-      .eq("id", row.id);
+    await updateRow(admin, "share_events", {
+      opened_at: row.opened_at ?? new Date().toISOString(),
+      click_count: (row.click_count ?? 0) + 1,
+    }).eq("id", row.id);
   } catch {
     // Intentionally silent.
   }

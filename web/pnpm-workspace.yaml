@@ -1,5 +1,5 @@
 allowBuilds:
-  '@depot/cli': true
+  "@depot/cli": true
   esbuild: true
   protobufjs: true
   sharp: true

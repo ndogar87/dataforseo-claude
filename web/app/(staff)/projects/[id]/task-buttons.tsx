@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { TASK_BUTTONS } from "@/lib/mock-data";
+import { TASK_BUTTONS } from "@/lib/task-types";
 import type { TaskType } from "@/lib/types";
 
 import { runTask } from "./actions";
@@ -36,7 +36,8 @@ const PROMPTS: Record<
   },
   rankings: {
     title: "Track rankings",
-    description: "Comma-separated keywords to check current SERP positions for.",
+    description:
+      "Comma-separated keywords to check current SERP positions for.",
     placeholder: "shoes, running shoes, marathon shoes",
     field: "keywords",
   },
@@ -64,7 +65,10 @@ export function TaskButtons({
   const [promptOpen, setPromptOpen] = useState<PromptKind | null>(null);
   const [promptValue, setPromptValue] = useState("");
 
-  async function dispatch(type: TaskType, extraParams: Record<string, unknown>) {
+  async function dispatch(
+    type: TaskType,
+    extraParams: Record<string, unknown>,
+  ) {
     setPending(type);
     try {
       const params: Record<string, unknown> = { domain, ...extraParams };

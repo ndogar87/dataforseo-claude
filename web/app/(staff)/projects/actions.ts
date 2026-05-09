@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { getServiceClient } from "@/lib/supabase/admin";
+import { getServiceClient, insertRow } from "@/lib/supabase/admin";
 
 export interface CreateProjectInput {
   domain: string;
@@ -103,15 +103,15 @@ export async function createProject(
   // 3. Insert the project via service-role to keep insert audit trail
   // consistent with other server actions (see [id]/actions.ts).
   const admin = getServiceClient();
-  const insertPayload = {
-    workspace_id: chosen.workspace_id,
-    domain,
-    display_name: displayName,
-  } as unknown as never;
-
-  const { data: inserted, error: insertErr } = await admin
-    .from("projects")
-    .insert(insertPayload)
+  const { data: inserted, error: insertErr } = await insertRow(
+    admin,
+    "projects",
+    {
+      workspace_id: chosen.workspace_id,
+      domain,
+      display_name: displayName,
+    },
+  )
     .select("id")
     .single<{ id: string }>();
 

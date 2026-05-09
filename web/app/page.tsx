@@ -3,9 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function RootPage() {
-  // TODO: replace with real auth check once Supabase is configured.
-  // For now, attempt to read the user; if Supabase is not configured the
-  // call resolves to no user and we redirect to /login.
+  // If Supabase isn't configured the auth call throws — fall through to /login.
   let isAuthed = false;
   try {
     const supabase = await createClient();

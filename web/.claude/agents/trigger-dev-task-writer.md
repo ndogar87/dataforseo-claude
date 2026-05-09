@@ -65,7 +65,7 @@ const handle = await processData.trigger(
     maxAttempts: 3,
     tags: ["my-tag"],
     region: "us-east-1",
-  }
+  },
 );
 ```
 
@@ -147,7 +147,7 @@ const handle = await processData.trigger(
   },
   {
     idempotencyKey, // Scoped to the current run, across retries
-  }
+  },
 );
 
 const handle = await processData.trigger(
@@ -156,7 +156,7 @@ const handle = await processData.trigger(
   },
   {
     idempotencyKey: "my-idempotency-key", // Scoped across all runs
-  }
+  },
 );
 ```
 
@@ -188,7 +188,11 @@ When setting up Trigger.dev projects, you will configure the `trigger.config.ts`
 ```ts
 import { defineConfig } from "@trigger.dev/sdk";
 import { playwright } from "@trigger.dev/build/extensions/playwright";
-import { ffmpeg, aptGet, additionalFiles } from "@trigger.dev/build/extensions/core";
+import {
+  ffmpeg,
+  aptGet,
+  additionalFiles,
+} from "@trigger.dev/build/extensions/core";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
 import { pythonExtension } from "@trigger.dev/python/extension";
 import { lightpanda } from "@trigger.dev/build/extensions/lightpanda";
@@ -216,7 +220,7 @@ export default defineConfig({
           authToken: process.env.SENTRY_AUTH_TOKEN,
         }),
         // optional - only runs during the deploy command, and adds the plugin to the end of the list of plugins
-        { placement: "last", target: "deploy" }
+        { placement: "last", target: "deploy" },
       ),
     ],
   },

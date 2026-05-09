@@ -3,11 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { getServiceClient } from "@/lib/supabase/admin";
+import { getServiceClient, updateRow } from "@/lib/supabase/admin";
 
-export type SaveNotesResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type SaveNotesResult = { ok: true } | { ok: false; error: string };
 
 /**
  * Persist the markdown notes textarea on a project.
@@ -53,15 +51,10 @@ export async function saveProjectNotes(
 
   // 3. Update via service-role.
   const admin = getServiceClient();
-  const updatePayload = {
+  const { error: updateErr } = await updateRow(admin, "projects", {
     notes_md: notesMd ?? "",
     updated_at: new Date().toISOString(),
-  } as unknown as never;
-
-  const { error: updateErr } = await admin
-    .from("projects")
-    .update(updatePayload)
-    .eq("id", projectId);
+  }).eq("id", projectId);
 
   if (updateErr) {
     return {

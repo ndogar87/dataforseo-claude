@@ -4,20 +4,14 @@ import path from "path";
 import { Resend } from "resend";
 
 import { createClient as createServerClient } from "@/lib/supabase/server";
-import { getServiceClient } from "@/lib/supabase/admin";
+import { getServiceClient, insertRow, updateRow } from "@/lib/supabase/admin";
 import {
   buildShareUrl,
   defaultExpiry,
   mintShareToken,
-  stripBucketPrefix,
   tokenIsFresh,
 } from "@/lib/share";
-
-interface DeliverableRow {
-  id: string;
-  task_id: string;
-  storage_path: string;
-}
+import { stripBucketPrefix } from "@/lib/storage";
 
 /**
  * Mint a 1-hour signed URL for a deliverable. Uses the service-role
@@ -48,7 +42,7 @@ export async function mintDeliverableUrl(
     return { url: null, error: "Deliverable not found or access denied" };
   }
 
-  const row = data as DeliverableRow;
+  const row = data as { id: string; task_id: string; storage_path: string };
 
   const objectPath = stripBucketPrefix(row.storage_path);
   const admin = getServiceClient();
@@ -140,9 +134,7 @@ export async function shareDeliverable(
     // Supabase returns the `tasks` join as an object when the relationship
     // is a single FK, but the JS client types it as `unknown[]` — narrow
     // explicitly here so the email subject is always sensible.
-    const tasksJoin = (
-      deliverableData as { tasks?: unknown }
-    ).tasks as
+    const tasksJoin = (deliverableData as { tasks?: unknown }).tasks as
       | {
           projects?: { domain?: string; display_name?: string } | null;
         }
@@ -172,10 +164,10 @@ export async function shareDeliverable(
     let token = existingToken;
     if (!token || !tokenIsFresh(existingExpiry)) {
       token = mintShareToken();
-      const { error: updateErr } = await admin
-        .from("deliverables")
-        .update({ public_token: token, expires_at: defaultExpiry() })
-        .eq("id", deliverableId);
+      const { error: updateErr } = await updateRow(admin, "deliverables", {
+        public_token: token,
+        expires_at: defaultExpiry(),
+      }).eq("id", deliverableId);
       if (updateErr) {
         return {
           ok: false,
@@ -212,14 +204,17 @@ export async function shareDeliverable(
 
     // Always log the share attempt before the email — so the deliverable
     // is shareable even if SMTP is misconfigured.
-    const { error: shareEventErr } = await admin.from("share_events").insert({
+    const { error: shareEventErr } = await insertRow(admin, "share_events", {
       deliverable_id: deliverableId,
       recipient_email: recipientEmail,
       sent_at: new Date().toISOString(),
     });
     if (shareEventErr) {
       // Non-fatal; log but continue. The token + link are still valid.
-      console.error("[shareDeliverable] share_events insert failed", shareEventErr);
+      console.error(
+        "[shareDeliverable] share_events insert failed",
+        shareEventErr,
+      );
     }
 
     let warning: string | undefined;
@@ -281,7 +276,11 @@ interface EmailParts {
   projectDomain: string;
 }
 
-function renderEmailHtml({ shareUrl, message, projectDomain }: EmailParts): string {
+function renderEmailHtml({
+  shareUrl,
+  message,
+  projectDomain,
+}: EmailParts): string {
   const safeMessage = message ? escapeHtml(message) : "";
   const safeUrl = escapeHtml(shareUrl);
   const safeDomain = escapeHtml(projectDomain);
@@ -299,7 +298,11 @@ function renderEmailHtml({ shareUrl, message, projectDomain }: EmailParts): stri
 </html>`;
 }
 
-function renderEmailText({ shareUrl, message, projectDomain }: EmailParts): string {
+function renderEmailText({
+  shareUrl,
+  message,
+  projectDomain,
+}: EmailParts): string {
   const lines = [
     `Hi,`,
     ``,

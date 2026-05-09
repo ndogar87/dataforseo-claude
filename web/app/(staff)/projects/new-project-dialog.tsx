@@ -108,10 +108,7 @@ export function NewProjectDialog({
           </DialogHeader>
 
           <div className="space-y-2">
-            <label
-              htmlFor="new-project-domain"
-              className="text-sm font-medium"
-            >
+            <label htmlFor="new-project-domain" className="text-sm font-medium">
               Domain
             </label>
             <Input
@@ -131,10 +128,7 @@ export function NewProjectDialog({
           </div>
 
           <div className="space-y-2">
-            <label
-              htmlFor="new-project-name"
-              className="text-sm font-medium"
-            >
+            <label htmlFor="new-project-name" className="text-sm font-medium">
               Display name
             </label>
             <Input
