@@ -80,9 +80,12 @@ export function TaskTimeline({
           set("subscribed");
           return;
         }
-        // Anything else is a real signal worth surfacing. We log to the
-        // console so a dev can spot it; the UI shows a small banner.
-        // Don't echo any task data — keep this strictly diagnostic.
+        // CLOSED is the normal terminal state when we call removeChannel
+        // ourselves (effect cleanup, route change). Not an error.
+        if (status === "CLOSED") {
+          set("connecting");
+          return;
+        }
         console.error(`[realtime] ${label} channel: ${status}`, err);
         set("error");
       };
