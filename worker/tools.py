@@ -482,9 +482,15 @@ TOOLS: list[dict[str, Any]] = [
 # Public helpers -------------------------------------------------------------
 
 
-def get_tool_definitions() -> list[dict[str, Any]]:
-    """Return the tool list in the format Claude expects (no executors)."""
-    return [
+def get_tool_definitions(*, cache_last: bool = False) -> list[dict[str, Any]]:
+    """Return the tool list in the format Claude expects (no executors).
+
+    When ``cache_last=True``, attach an ephemeral ``cache_control`` to
+    the last tool so Anthropic caches the entire tool block for ~5
+    minutes. Subsequent iterations of the same agent loop pay 0.10x
+    input cost on the cached tokens instead of 1x.
+    """
+    defs: list[dict[str, Any]] = [
         {
             "name": t["name"],
             "description": t["description"],
@@ -492,6 +498,9 @@ def get_tool_definitions() -> list[dict[str, Any]]:
         }
         for t in TOOLS
     ]
+    if cache_last and defs:
+        defs[-1] = {**defs[-1], "cache_control": {"type": "ephemeral"}}
+    return defs
 
 
 def execute_tool(name: str, args: dict[str, Any], context: dict[str, Any]) -> Any:

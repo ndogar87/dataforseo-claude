@@ -27,14 +27,31 @@ from anthropic._exceptions import APIError
 from system_prompts import get_system_prompt
 from tools import execute_tool, get_tool_definitions
 
-# Anthropic Opus 4.7 — the model called out in the project plan.
+# Default model when no task-type override and no env override is set.
 DEFAULT_MODEL = "claude-opus-4-7"
 MAX_ITERATIONS = 25
 DEFAULT_MAX_TOKENS = 4096
 
-# Per-million-token prices (USD). Conservative estimates — update when
-# Anthropic publishes Opus 4.7 pricing officially. Cache pricing is
-# tracked separately because cache hits are ~10% of input cost.
+# Per-task-type model selection. Light tasks ("fetch + format") run on
+# Haiku for ~10x cost savings; heavier tasks that need real scoring or
+# multi-stage reasoning stay on Opus. Anything not listed here falls
+# back to DEFAULT_MODEL.
+#
+# CLAUDE_MODEL env var (if set) overrides this map for ALL task types,
+# in case you want to lock the worker to one model temporarily.
+MODEL_FOR_TASK: dict[str, str] = {
+    "audit": "claude-opus-4-7",        # composite scoring across 5 areas
+    "technical": "claude-opus-4-7",    # severity bucketing + impact estimates
+    "backlinks": "claude-opus-4-7",    # toxicity judgment
+    "quick": "claude-haiku-4-5-20251001",
+    "keywords": "claude-haiku-4-5-20251001",
+    "rankings": "claude-haiku-4-5-20251001",
+    "content_gap": "claude-haiku-4-5-20251001",
+    "report_pdf": "claude-haiku-4-5-20251001",
+}
+
+# Per-million-token prices (USD). Cache write is 1.25x input; cache read
+# is 0.10x input (Anthropic ephemeral caching, 5-min TTL).
 MODEL_PRICING_PER_M_TOKENS: dict[str, dict[str, float]] = {
     "claude-opus-4-7": {
         "input": 15.0,
@@ -42,10 +59,29 @@ MODEL_PRICING_PER_M_TOKENS: dict[str, dict[str, float]] = {
         "cache_write": 18.75,
         "cache_read": 1.50,
     },
-    # Aliases / fallbacks
     "claude-opus-4-5": {"input": 15.0, "output": 75.0, "cache_write": 18.75, "cache_read": 1.50},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.30},
     "claude-sonnet-4-5": {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.30},
+    "claude-haiku-4-5-20251001": {
+        "input": 1.0,
+        "output": 5.0,
+        "cache_write": 1.25,
+        "cache_read": 0.10,
+    },
 }
+
+
+def _model_for(task_type: str, override: str | None) -> str:
+    """Resolve which model to use for a task.
+
+    Priority: explicit override > CLAUDE_MODEL env > per-task-type map > DEFAULT_MODEL.
+    """
+    if override:
+        return override
+    env_override = os.environ.get("CLAUDE_MODEL")
+    if env_override:
+        return env_override
+    return MODEL_FOR_TASK.get(task_type, DEFAULT_MODEL)
 
 
 class AgentConfigError(RuntimeError):
@@ -157,10 +193,23 @@ def run_agent(
             "ANTHROPIC_API_KEY is not set on the worker — the agent cannot start."
         )
 
-    chosen_model = model or os.environ.get("CLAUDE_MODEL") or DEFAULT_MODEL
+    chosen_model = _model_for(task_type, model)
     system_prompt = get_system_prompt(task_type)
-    tool_defs = get_tool_definitions()
+    tool_defs = get_tool_definitions(cache_last=True)
     client = Anthropic(api_key=api_key)
+
+    # Prompt caching: serve `system` as a single content block with an
+    # ephemeral cache breakpoint. The system prompt + tool definitions
+    # are stable across the iteration loop, so iterations 2+ pay 0.10x
+    # input cost on those tokens instead of 1x. Anthropic allows up to
+    # 4 cache breakpoints per request; we use 2 (system + last tool).
+    system_blocks: list[dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": system_prompt,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
 
     # Seed the conversation with the task brief.
     user_brief = json.dumps(
@@ -200,7 +249,7 @@ def run_agent(
             response = client.messages.create(
                 model=chosen_model,
                 max_tokens=max_tokens,
-                system=system_prompt,
+                system=system_blocks,
                 tools=tool_defs,
                 messages=messages,
             )
